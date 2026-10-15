@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giám sát mực nước bể nuôi</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9; color: #333; }
+        h1 { color: #007bff; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #218838; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Giám sát mực nước bể nuôi</h1>
+        <p><strong>Mực nước:</strong> <span id="water-level">--</span> cm</p>
+        <p><strong>Nhiệt độ:</strong> <span id="temperature">--</span> °C</p>
+    </div>
+    <div class="card">
+        <h2>Điều khiển thiết bị</h2>
+        <button class="btn" onclick="alert('Đã bật máy bơm nước vào')">Máy bơm nước vào</button>
+        <button class="btn" style="background: #dc3545;" onclick="alert('Đã mở van thoát nước ra')">Van thoát nước ra</button>
+    </div>
+</body>
+</html>
