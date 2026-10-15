@@ -3,25 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giám sát mực nước bể nuôi</title>
+    <title>Hệ Thống Giám Sát và Điều Khiển Mực Nước Thông Minh</title>
+    <!-- Thư viện Biểu đồ Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9; color: #333; }
-        h1 { color: #007bff; }
-        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .btn { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background: #218838; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: #f0f4f8; color: #333; }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { color: #0066cc; margin-bottom: 5px; }
+        
+        .container { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        
+        /* Thẻ số liệu */
+        .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: center; margin-bottom: 15px; }
+        .metric-box { background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #0066cc; }
+        .metric-box.temp { border-left-color: #ff6384; }
+        .metric-value { font-size: 1.8em; font-weight: bold; color: #111; }
+
+        /* Bảng điều khiển nút bấm */
+        .control-group { display: flex; flex-direction: column; gap: 12px; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 10px 15px; border-radius: 8px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-on { background: #28a745; }
+        .btn-off { background: #dc3545; }
+        .btn:hover { opacity: 0.9; }
+
+        .chart-container { grid-column: span 1; }
+        @media (min-width: 768px) {
+            .chart-container { grid-column: span 2; }
+        }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>Giám sát mực nước bể nuôi</h1>
-        <p><strong>Mực nước:</strong> <span id="water-level">--</span> cm</p>
-        <p><strong>Nhiệt độ:</strong> <span id="temperature">--</span> °C</p>
+
+    <div class="header">
+        <h1>Giám Sát và Điều Khiển Mực Nước Bể Nuôi</h1>
+        <p>Hệ thống tự động hóa thời gian thực tích hợp thuật toán xử lý ngưỡng mực nước</p>
     </div>
-    <div class="card">
-        <h2>Điều khiển thiết bị</h2>
-        <button class="btn" onclick="alert('Đã bật máy bơm nước vào')">Máy bơm nước vào</button>
-        <button class="btn" style="background: #dc3545;" onclick="alert('Đã mở van thoát nước ra')">Van thoát nước ra</button>
+
+    <div class="container">
+        <!-- 1. Thẻ hiển thị dữ liệu số -->
+        <div class="card">
+            <h2>Thông Số Thời Gian Thực</h2>
+            <div class="metric-grid">
+                <div class="metric-box">
+                    <p style="margin:0; color:#666;">Mực Nước</p>
+                    <div class="metric-value"><span id="water-val">50</span> <span style="font-size:0.6em">cm</span></div>
+                </div>
+                <div class="metric-box temp">
+                    <p style="margin:0; color:#666;">Nhiệt Độ</p>
+                    <div class="metric-value"><span id="temp-val">28.0</span> <span style="font-size:0.6em">°C</span></div>
+                </div>
+            </div>
+            <p><strong>Trạng thái Bơm Vào:</strong> <span id="pump-state" style="color: green; font-weight: bold;">TẮT</span></p>
+            <p><strong>Trạng thái Van Xả:</strong> <span id="drain-state" style="color: red; font-weight: bold;">ĐÓNG</span></p>
+        </div>
+
+        <!-- 2. Thẻ điều khiển thiết bị (Manual / Auto) -->
+        <div class="card">
+            <h2>Điều Khiển Thiết Bị</h2>
+            <div class="control-group">
+                <div class="control-row">
+                    <span>Máy bơm nước Vào</span>
+                    <button id="pump-btn" class="btn btn-off" onclick="manualTogglePump()">Bật Bơm</button>
+                </div>
+                <div class="control-row">
+                    <span>Van thoát nước Ra</span>
+                    <button id="drain-btn" class="btn btn-off" onclick="manualToggleDrain()">Mở Van</button>
+                </div>
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">* Thuật toán: Tự động bật bơm khi nước < 30cm và tắt khi >= 80cm; Mở van xả khi nước > 85cm và đóng khi <= 50cm.</p>
+            </div>
+        </div>
+
+        <!-- 3. Biểu đồ Mực Nước -->
+        <div class="card chart-container">
+            <h2>Biểu Đồ Mực Nước (cm)</h2>
+            <canvas id="waterChart" height="100"></canvas>
+        </div>
+
+        <!-- 4. Biểu đồ Nhiệt Độ -->
+        <div class="card chart-container">
+            <h2>Biểu Đồ Nhiệt Độ (°C)</h2>
+            <canvas id="tempChart" height="100"></canvas>
+        </div>
     </div>
+
+    <script>
+        // Cấu hình Biểu đồ Mực nước
+        const ctxWater = document.getElementById('waterChart').getContext('2d');
+        const waterChart = new Chart(ctxWater, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Mực nước (cm)',
+                    data: [],
+                    borderColor: '#0066cc',
+                    backgroundColor: 'rgba(0, 102, 204, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: { responsive: true, scales: { y: { min: 0, max: 100 } } }
+        });
+
+        // Cấu hình Biểu đồ Nhiệt độ
+        const ctxTemp = document.getElementById('tempChart').getContext('2d');
+        const tempChart = new Chart(ctxTemp, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Nhiệt độ (°C)',
+                    data: [],
+                    borderColor: '#ff6384',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: { responsive: true, scales: { y: { min: 20, max: 40 } } }
+        });
+
+        // Biến trạng thái hệ thống
+        let currentWater = 50;
+        let currentTemp = 28.0;
+        let isPumpOn = false;
+        let isDrainOn = false;
+
+        // Nút bấm thủ công (Manual)
+        function manualTogglePump() {
+            isPumpOn = !isPumpOn;
+            updateUIState();
+        }
+
+        function manualToggleDrain() {
+            isDrainOn = !isDrainOn;
+            updateUIState();
+        }
+
+        function updateUIState() {
+            document.getElementById('pump-btn').innerText = isPumpOn ? "Tắt Bơm" : "Bật Bơm";
+            document.getElementById('pump-btn').className = isPumpOn ? "btn btn-on" : "btn btn-off";
+            document.getElementById('pump-state').innerText = isPumpOn ? "ĐANG BẬT" : "TẮT";
+
+            document.getElementById('drain-btn').innerText = isDrainOn ? "Đóng Van" : "Mở Van";
+            document.getElementById('drain-btn').className = isDrainOn ? "btn btn-on" : "btn btn-off";
+            document.getElementById('drain-state').innerText = isDrainOn ? "ĐANG MỞ" : "ĐÓNG";
+        }
+
+        // Thuật toán cập nhật dữ liệu và điều khiển tự động theo ngưỡng thực tế
+        setInterval(() => {
+            // Giả lập thay đổi mực nước dựa trên trạng thái thiết bị
+            if (isPumpOn && !isDrainOn) {
+                currentWater += 2; // Nước đang cấp vào
+                if (currentWater >= 80) isPumpOn = false; // Thuật toán: Ngắt bơm khi đạt ngưỡng trên (80cm)
+            } else if (isDrainOn && !isPumpOn) {
+                currentWater -= 2; // Nước đang thoát ra
+                if (currentWater <= 50) isDrainOn = false; // Thuật toán: Đóng van khi về ngưỡng an toàn (50cm)
+            } else {
+                // Thuật toán tự động kích hoạt khi không can thiệp thủ công
+                if (currentWater < 30) {
+                    isPumpOn = true; // Cạn nước -> Tự bật bơm vào
+                } else if (currentWater > 85) {
+                    isDrainOn = true; // Nguy cơ tràn -> Tự mở van thoát ra
+                }
+            }
+
+            // Giới hạn giá trị trong khoảng 0 - 100
+            currentWater = Math.max(0, Math.min(100, currentWater + (Math.random() - 0.5)));
+            currentTemp = Math.max(22, Math.min(38, currentTemp + (Math.random() - 0.5) * 0.4));
+
+            // Cập nhật số hiển thị lên giao diện
+            document.getElementById('water-val').innerText = currentWater.toFixed(1);
+            document.getElementById('temp-val').innerText = currentTemp.toFixed(1);
+            updateUIState();
+
+            // Cập nhật thời gian thực vào biểu đồ
+            const timeString = new Date().toLocaleTimeString();
+            
+            // Đẩy dữ liệu vào biểu đồ Mực nước
+            waterChart.data.labels.push(timeString);
+            waterChart.data.datasets[0].data.push(currentWater);
+            if (waterChart.data.labels.length > 10) {
+                waterChart.data.labels.shift();
+                waterChart.data.datasets[0].data.shift();
+            }
+            waterChart.update();
+
+            // Đẩy dữ liệu vào biểu đồ Nhiệt độ
+            tempChart.data.labels.push(timeString);
+            tempChart.data.datasets[0].data.push(currentTemp);
+            if (tempChart.data.labels.length > 10) {
+                tempChart.data.labels.shift();
+                tempChart.data.datasets[0].data.shift();
+            }
+            tempChart.update();
+
+        }, 2000); // Cập nhật mỗi 2 giây
+    </script>
 </body>
 </html>
