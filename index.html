@@ -3,133 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Giam Sat Muc Nuoc</title>
+    <title>Giám Sát Mực Nước - Aquaculture IoT</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f4f7f6; color: #333; }
-        .container { max-width: 900px; margin: 0 auto; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f0f4f8; color: #333; }
+        .container { max-width: 950px; margin: 0 auto; }
         h1 { text-align: center; color: #0066cc; }
-        .card { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .card { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: center; }
-        .box { background: #e9ecef; padding: 15px; border-radius: 6px; }
-        .value { font-size: 24px; font-weight: bold; color: #0056b3; }
-        .btn { padding: 10px 20px; border: none; border-radius: 5px; color: #fff; font-weight: bold; cursor: pointer; width: 100%; margin-top: 5px; }
+        .box { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .value { font-size: 26px; font-weight: bold; color: #0066cc; }
+        .btn { padding: 12px 20px; border: none; border-radius: 6px; color: #fff; font-weight: bold; cursor: pointer; width: 100%; margin-top: 8px; transition: 0.2s; }
         .btn-on { background: #28a745; }
         .btn-off { background: #dc3545; }
+        #mqtt-status { font-weight: bold; text-align: center; margin-bottom: 15px; color: orange; }
+        .mode-box { text-align: center; margin-bottom: 15px; }
+        .mode-btn { padding: 8px 16px; margin: 0 5px; font-weight: bold; cursor: pointer; border-radius: 5px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Hệ Thống Giám Sát Mực Nước Bể Nuôi</h1>
+        <h1>Hệ Thống Giám Sát và Điều Khiển Ao Nuôi</h1>
+        <div id="mqtt-status">Trang thái MQTT: Đang kết nối...</div>
         
+        <div class="mode-box">
+            <span>Chế độ hệ thống: </span>
+            <button class="mode-btn" onclick="setMode('AUTO')" id="btn-auto" style="background:#0066cc; color:#fff;">AUTO</button>
+            <button class="mode-btn" onclick="setMode('MANUAL')" id="btn-manual">MANUAL</button>
+        </div>
+
         <div class="card">
-            <h3>Thông Số Thời Gian Thực</h3>
+            <h3>Thông Số Cảm Biến Thời Gian Thực</h3>
             <div class="grid">
                 <div class="box">
                     <p>Mực Nước</p>
-                    <div class="value"><span id="water">50</span> cm</div>
+                    <div class="value"><span id="water">--</span> cm</div>
                 </div>
                 <div class="box">
-                    <p>Nhiệt Độ</p>
-                    <div class="value"><span id="temp">28</span> °C</div>
+                    <p>Nhiệt Độ Nước</p>
+                    <div class="value"><span id="temp">--</span> °C</div>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h3>Điều Khiển Thiết Bị (Thủ Công / Tự Động)</h3>
+            <h3>Điều Khiển Cơ Cấu (Chỉ khả dụng khi ở chế độ MANUAL)</h3>
             <div class="grid">
                 <div>
-                    <p>Máy Bơm Vào: <b id="pump-txt" style="color:red">TẮT</b></p>
+                    <p>Máy Bơm Nước: <b id="pump-txt" style="color:red">OFF</b></p>
                     <button id="pump-btn" class="btn btn-off" onclick="togglePump()">Bật Máy Bơm</button>
                 </div>
                 <div>
-                    <p>Van Xả Ra: <b id="drain-txt" style="color:red">ĐÓNG</b></p>
-                    <button id="drain-btn" class="btn btn-off" onclick="toggleDrain()">Mở Van Xả</button>
+                    <p>Van Xả Nước: <b id="valve-txt" style="color:red">OFF</b></p>
+                    <button id="valve-btn" class="btn btn-off" onclick="toggleValve()">Mở Van Xả</button>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <h3>Biểu Đồ Mực Nước & Nhiệt Độ</h3>
+            <h3>Biểu Đồ Theo Dõi Thời Gian Thực</h3>
             <canvas id="myChart" height="120"></canvas>
         </div>
     </div>
 
     <script>
+        // Cấu hình Biểu đồ Chart.js
         const ctx = document.getElementById('myChart').getContext('2d');
         const chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [
-                    { label: 'Mực nước (cm)', data: [], borderColor: '#0066cc', tension: 0.3 },
-                    { label: 'Nhiệt độ (°C)', data: [], borderColor: '#ff6384', tension: 0.3 }
+                    { label: 'Mực nước (cm)', data: [], borderColor: '#0066cc', tension: 0.3, fill: false },
+                    { label: 'Nhiệt độ (°C)', data: [], borderColor: '#ff6384', tension: 0.3, fill: false }
                 ]
             },
-            options: { responsive: true, scales: { y: { min: 0, max: 100 } } }
+            options: { responsive: true, scales: { y: { min: 0, max: 400 } } }
         });
 
-        let waterVal = 50;
-        let tempVal = 28;
-        let pumpOn = false;
-        let drainOn = false;
+        // Kết nối MQTT Broker qua WebSocket
+        const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        let currentMode = 'AUTO';
+        let pumpState = false;
+        let valveState = false;
+
+        client.on('connect', function () {
+            document.getElementById('mqtt-status').innerText = "Trạng thái MQTT: Đã kết nối thành công với mạch Wokwi!";
+            document.getElementById('mqtt-status').style.color = "green";
+            
+            // Sub các topic trạng thái từ ESP32
+            client.subscribe('aquaculture/tank01/telemetry');
+            client.subscribe('aquaculture/tank01/pump/state');
+            client.subscribe('aquaculture/tank01/valve/state');
+        });
+
+        client.on('message', function (topic, payload) {
+            const msg = payload.toString();
+            
+            if (topic === 'aquaculture/tank01/telemetry') {
+                try {
+                    const data = JSON.parse(msg);
+                    if (data.water_cm !== null) {
+                        document.getElementById('water').innerText = data.water_cm.toFixed(1);
+                        
+                        // Đẩy dữ liệu vào biểu đồ
+                        const timeNow = new Date().toLocaleTimeString();
+                        chart.data.labels.push(timeNow);
+                        chart.data.datasets[0].data.push(data.water_cm);
+                        if(data.temperature_c !== null) {
+                            chart.data.datasets[1].data.push(data.temperature_c);
+                            document.getElementById('temp').innerText = data.temperature_c.toFixed(1);
+                        }
+
+                        if (chart.data.labels.length > 10) {
+                            chart.data.labels.shift();
+                            chart.data.datasets[0].data.shift();
+                            chart.data.datasets[1].data.shift();
+                        }
+                        chart.update();
+                    }
+                } catch (e) {
+                    console.error("Lỗi parse JSON telemetry");
+                }
+            }
+            
+            if (topic === 'aquaculture/tank01/pump/state') {
+                pumpState = (msg === 'ON');
+                updateUI();
+            }
+            
+            if (topic === 'aquaculture/tank01/valve/state') {
+                valveState = (msg === 'ON');
+                updateUI();
+            }
+        });
+
+        function setMode(mode) {
+            currentMode = mode;
+            client.publish('aquaculture/tank01/mode/set', mode);
+            
+            if(mode === 'AUTO') {
+                document.getElementById('btn-auto').style.background = '#0066cc';
+                document.getElementById('btn-auto').style.color = '#fff';
+                document.getElementById('btn-manual').style.background = '#f0f4f8';
+                document.getElementById('btn-manual').style.color = '#333';
+            } else {
+                document.getElementById('btn-manual').style.background = '#0066cc';
+                document.getElementById('btn-manual').style.color = '#fff';
+                document.getElementById('btn-auto').style.background = '#f0f4f8';
+                document.getElementById('btn-auto').style.color = '#333';
+            }
+        }
 
         function togglePump() {
-            pumpOn = !pumpOn;
-            updateControlUI();
-        }
-
-        function toggleDrain() {
-            drainOn = !drainOn;
-            updateControlUI();
-        }
-
-        function updateControlUI() {
-            document.getElementById('pump-txt').innerText = pumpOn ? "ĐANG BẬT" : "TẮT";
-            document.getElementById('pump-txt').style.color = pumpOn ? "green" : "red";
-            document.getElementById('pump-btn').innerText = pumpOn ? "Tắt Máy Bơm" : "Bật Máy Bơm";
-            document.getElementById('pump-btn').className = pumpOn ? "btn btn-on" : "btn btn-off";
-
-            document.getElementById('drain-txt').innerText = drainOn ? "ĐANG MỞ" : "ĐÓNG";
-            document.getElementById('drain-txt').style.color = drainOn ? "green" : "red";
-            document.getElementById('drain-btn').innerText = drainOn ? "Đóng Van Xả" : "Mở Van Xả";
-            document.getElementById('drain-btn').className = drainOn ? "btn btn-on" : "btn btn-off";
-        }
-
-        setInterval(() => {
-            // Thuật toán thay đổi mực nước thực tế
-            if (pumpOn && !drainOn) {
-                waterVal += 2;
-                if (waterVal >= 80) pumpOn = false; // Đạt ngưỡng trên thì tự tắt bơm
-            } else if (drainOn && !pumpOn) {
-                waterVal -= 2;
-                if (waterVal <= 50) drainOn = false; // Về ngưỡng an toàn thì đóng van
-            } else {
-                // Tự động hóa theo ngưỡng thực tế
-                if (waterVal < 30) pumpOn = true;
-                if (waterVal > 85) drainOn = true;
+            if(currentMode === 'AUTO') {
+                alert("Đang ở chế độ AUTO, không thể điều khiển thủ công!");
+                return;
             }
+            let newState = !pumpState;
+            client.publish('aquaculture/tank01/pump/set', newState ? 'ON' : 'OFF');
+        }
 
-            waterVal = Math.max(0, Math.min(100, waterVal + (Math.random() - 0.5)));
-            tempVal = Math.max(20, Math.min(40, tempVal + (Math.random() - 0.5) * 0.5));
-
-            document.getElementById('water').innerText = waterVal.toFixed(1);
-            document.getElementById('temp').innerText = tempVal.toFixed(1);
-            updateControlUI();
-
-            const timeNow = new Date().toLocaleTimeString();
-            chart.data.labels.push(timeNow);
-            chart.data.datasets[0].data.push(waterVal);
-            chart.data.datasets[1].data.push(tempVal);
-
-            if (chart.data.labels.length > 8) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
-                chart.data.datasets[1].data.shift();
+        function toggleValve() {
+            if(currentMode === 'AUTO') {
+                alert("Đang ở chế độ AUTO, không thể điều khiển thủ công!");
+                return;
             }
-            chart.update();
-        }, 2000);
+            let newState = !valveState;
+            client.publish('aquaculture/tank01/valve/set', newState ? 'ON' : 'OFF');
+        }
+
+        function updateUI() {
+            document.getElementById('pump-txt').innerText = pumpState ? "ON" : "OFF";
+            document.getElementById('pump-txt').style.color = pumpState ? "green" : "red";
+            document.getElementById('pump-btn').innerText = pumpState ? "Tắt Máy Bơm" : "Bật Máy Bơm";
+            document.getElementById('pump-btn').className = pumpState ? "btn btn-on" : "btn btn-off";
+
+            document.getElementById('valve-txt').innerText = valveState ? "ON" : "OFF";
+            document.getElementById('valve-txt').style.color = valveState ? "green" : "red";
+            document.getElementById('valve-btn').innerText = valveState ? "Đóng Van Xả" : "Mở Van Xả";
+            document.getElementById('valve-btn').className = valveState ? "btn btn-on" : "btn btn-off";
+        }
     </script>
 </body>
 </html>
